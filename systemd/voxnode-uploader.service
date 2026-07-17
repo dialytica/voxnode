@@ -1,0 +1,37 @@
+[Unit]
+Description=voxnode uploader (store-and-forward audio to dialytica server)
+Documentation=https://github.com/dialytica/voxnode
+After=network-online.target voxnode-recorder.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=contai
+Group=contai
+
+Environment=VOXNODE_HOME=/opt/voxnode
+Environment=VOXNODE_CONFIG=/etc/voxnode/config.yaml
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/voxnode/.venv/bin/python -m voxnode.uploader
+
+WorkingDirectory=/opt/voxnode
+
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxnode-uploader
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=false
+ReadWritePaths=/var/voxnode /etc/voxnode
+# Uploader нужен исходящий HTTPS
+IPAddressDeny=
+
+[Install]
+WantedBy=multi-user.target

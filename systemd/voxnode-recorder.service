@@ -1,0 +1,40 @@
+[Unit]
+Description=voxnode audio recorder (continuous Opus segments)
+Documentation=https://github.com/dialytica/voxnode
+After=network.target sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+User=contai
+Group=contai
+
+# Каталог установки и venv (ohmyzsh-style: всё в /opt/voxnode)
+Environment=VOXNODE_HOME=/opt/voxnode
+Environment=VOXNODE_CONFIG=/etc/voxnode/config.yaml
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/voxnode/.venv/bin/python -m voxnode.recorder
+
+WorkingDirectory=/opt/voxnode
+
+# Restart: ffmpeg должен крутиться 24/7. При падении — мгновенный рестарт.
+Restart=always
+RestartSec=3
+
+# Логи в journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxnode-recorder
+
+# Hardening: минимальные привилии
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=false
+ReadWritePaths=/var/voxnode /etc/voxnode
+# Доступ к аудио-устройствам
+DeviceAllow=/dev/snd rw
+
+[Install]
+WantedBy=multi-user.target
