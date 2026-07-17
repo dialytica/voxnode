@@ -223,16 +223,20 @@ mount "$VOXNODE_VAR_DIR/buffer" 2>/dev/null || true
 ok "Буфер готов: $VOXNODE_VAR_DIR/buffer (RAM) + $VOXNODE_VAR_DIR/spill (SD)"
 
 # ==============================================================================
-# 9. Systemd-юниты
+# 9. Systemd-юниты и timer
 # ==============================================================================
 info "Устанавливаю systemd-юниты..."
-for unit in voxnode-recorder.service voxnode-uploader.service; do
+for unit in voxnode-recorder.service voxnode-uploader.service \
+            voxnode-updater.service voxnode-updater.timer; do
     if [ -f "$VOXNODE_HOME/systemd/$unit" ]; then
         cp "$VOXNODE_HOME/systemd/$unit" "/etc/systemd/system/$unit"
     fi
 done
 systemctl daemon-reload
 ok "systemd-юниты установлены"
+
+# Включаем timer автообновления (раз в день)
+systemctl enable --now voxnode-updater.timer 2>/dev/null && ok "timer автообновления включён"
 
 # ==============================================================================
 # 10. CLI-симлинк /usr/local/bin/voxnode -> venv voxnode

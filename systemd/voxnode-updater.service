@@ -1,0 +1,23 @@
+[Unit]
+Description=voxnode auto-updater (check + upgrade from GitHub)
+Documentation=https://github.com/dialytica/voxnode
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Обновление требует root для: git (как contai через sudo -u), systemctl restart, cp в /etc
+ExecStart=/usr/bin/env bash /opt/voxnode/tools/check_for_upgrade.sh
+
+Environment=VOXNODE_HOME=/opt/voxnode
+Environment=VOXNODE_USER=contai
+
+WorkingDirectory=/opt/voxnode
+
+# Логи в journald, видны через journalctl -u voxnode-updater
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxnode-updater
+
+# Timeout на случай зависания сети/Git
+TimeoutStartSec=300

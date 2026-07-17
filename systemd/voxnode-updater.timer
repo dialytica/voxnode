@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily voxnode auto-update check
+Documentation=https://github.com/dialytica/voxnode
+
+[Timer]
+# Раз в день в случайное время (размазываем нагрузку на GitHub API)
+OnCalendar=*-*-* 04:00:00
+# Плюс рандомная задержка до 30 минут — чтобы парк устройств не дёргал API одновременно
+RandomizedDelaySec=30min
+# Если пропустили (малина была выключена) — запустим при первой возможности
+Persistent=true
+
+[Install]
+WantedBy=timers.target
