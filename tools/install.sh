@@ -243,7 +243,7 @@ ok "Буфер готов: $VOXNODE_VAR_DIR/buffer (RAM) + $VOXNODE_VAR_DIR/spil
 # ==============================================================================
 info "Устанавливаю systemd-юниты..."
 for unit in voxnode-recorder.service voxnode-uploader.service \
-            voxnode-portal.service \
+            voxnode-portal.service voxnode-watchdog.service \
             voxnode-updater.service voxnode-updater.timer; do
     if [ -f "$VOXNODE_HOME/systemd/$unit" ]; then
         cp "$VOXNODE_HOME/systemd/$unit" "/etc/systemd/system/$unit"
@@ -301,6 +301,7 @@ fi
 
 systemctl enable --now voxnode-recorder.service 2>/dev/null || warn "recorder не запустился (нормально, если микрофон ещё не подключён)"
 systemctl enable --now voxnode-uploader.service 2>/dev/null || warn "uploader не запустился"
+systemctl enable --now voxnode-watchdog.service 2>/dev/null || warn "watchdog не запустился"
 ok "Сервисы включены"
 
 # ==============================================================================

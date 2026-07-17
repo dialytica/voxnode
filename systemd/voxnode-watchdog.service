@@ -1,0 +1,41 @@
+[Unit]
+Description=voxnode watchdog (monitor recorder + buffer offload)
+Documentation=https://github.com/dialytica/voxnode
+After=voxnode-recorder.service
+Requires=voxnode-recorder.service
+
+[Service]
+Type=simple
+User=contai
+Group=contai
+
+Environment=VOXNODE_HOME=/opt/voxnode
+Environment=VOXNODE_CONFIG=/etc/voxnode/config.yaml
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/voxnode/.venv/bin/python -m voxnode.watchdog
+
+WorkingDirectory=/opt/voxnode
+
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxnode-watchdog
+
+# Watchdog нужен доступ к systemctl restart voxnode-recorder
+# (systemctl позволяет пользователям restart их собственных сервисов через polkit,
+# но для надёжности даём группе contai через sudoers — install.sh не настраивает,
+# поэтому watchdog-пользователь должен быть тем, от кого запущен recorder).
+# На voxnode-install: User=contai, recorder тоже User=contai — polkit пускает.
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=false
+ReadWritePaths=/var/voxnode /etc/voxnode
+
+[Install]
+WantedBy=multi-user.target

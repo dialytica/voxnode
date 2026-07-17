@@ -152,7 +152,7 @@ def cmd_doctor(_args) -> int:
         check("arecord доступен", False, "не вызывается")
 
     # --- Сервисы systemd ---
-    for svc in ("voxnode-recorder", "voxnode-uploader"):
+    for svc in ("voxnode-recorder", "voxnode-uploader", "voxnode-watchdog"):
         try:
             out = subprocess.check_output(
                 ["systemctl", "is-active", svc], text=True, timeout=3
@@ -170,6 +170,20 @@ def cmd_doctor(_args) -> int:
         check("Маршрут по умолчанию (интернет)", has_default)
     except subprocess.SubprocessError:
         pass
+
+    # --- Spill-буфер (SD) + свободное место ---
+    spill = Path("/var/voxnode/spill")
+    if spill.is_dir():
+        import shutil as _shutil
+        total, used, free = _shutil.disk_usage(spill)
+        free_pct = free / total * 100 if total else 0
+        check("Свободно на SD под spill", free_pct > 5, f"{free_pct:.0f}%")
+
+    # --- Файлы в буфере (для диагностики) ---
+    ram = Path("/var/voxnode/buffer")
+    if ram.is_dir():
+        files = list(ram.iterdir())
+        check("Файлов в RAM-буфере", True, f"{len(files)}")
 
     print()
     if issues == 0:
