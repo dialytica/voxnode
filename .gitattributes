@@ -1,0 +1,3 @@
+# Сохранять executable-бит на shell-скриптах
+*.sh text eol=lf
+tools/install.sh binary
