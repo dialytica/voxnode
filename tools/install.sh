@@ -185,7 +185,10 @@ ok "Python-зависимости установлены"
 # 6b. Устанавливаем voxnode как editable-пакет — pip создаст CLI voxnode
 # ==============================================================================
 info "Устанавливаю voxnode как пакет (это создаст CLI)..."
-sudo -u "$VOXNODE_USER" "$VOXNODE_HOME/.venv/bin/pip" install --quiet --no-deps -e "$VOXNODE_HOME"
+if ! sudo -u "$VOXNODE_USER" "$VOXNODE_HOME/.venv/bin/pip" install --no-deps -e "$VOXNODE_HOME"; then
+    error "pip install -e провалился. Проверьте целостность pyproject.toml."
+    exit 1
+fi
 ok "Пакет voxnode установлен"
 
 # ==============================================================================
