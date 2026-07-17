@@ -91,9 +91,10 @@ fi
 # ==============================================================================
 log "обнаружено обновление, запускаю upgrade.sh"
 UPGRADE_SCRIPT="$VOXNODE_HOME/tools/upgrade.sh"
-if [ ! -x "$UPGRADE_SCRIPT" ]; then
-    err "$UPGRADE_SCRIPT не найден или не исполняемый"
+if [ ! -f "$UPGRADE_SCRIPT" ]; then
+    err "$UPGRADE_SCRIPT не найден"
     exit 1
 fi
 
+# Запуск через sh — exec-bit не требуется (надёжнее на свеже-склонированном коде)
 sh "$UPGRADE_SCRIPT"
