@@ -227,6 +227,7 @@ ok "Буфер готов: $VOXNODE_VAR_DIR/buffer (RAM) + $VOXNODE_VAR_DIR/spil
 # ==============================================================================
 info "Устанавливаю systemd-юниты..."
 for unit in voxnode-recorder.service voxnode-uploader.service \
+            voxnode-portal.service \
             voxnode-updater.service voxnode-updater.timer; do
     if [ -f "$VOXNODE_HOME/systemd/$unit" ]; then
         cp "$VOXNODE_HOME/systemd/$unit" "/etc/systemd/system/$unit"
@@ -237,6 +238,10 @@ ok "systemd-юниты установлены"
 
 # Включаем timer автообновления (раз в день)
 systemctl enable --now voxnode-updater.timer 2>/dev/null && ok "timer автообновления включён"
+
+# Включаем portal-сервис (стартует только если нет маркера wifi-configured —
+# см. ConditionPathExists в unit-файле)
+systemctl enable voxnode-portal.service 2>/dev/null && ok "portal-сервис включён"
 
 # ==============================================================================
 # 10. CLI-симлинк /usr/local/bin/voxnode -> venv voxnode
@@ -256,10 +261,18 @@ chmod +x /usr/local/bin/voxnode
 ok "CLI доступен: voxnode"
 
 # ==============================================================================
+# 10b. Симлинк voxnode-reset (сброс к заводским → captive portal)
+# ==============================================================================
+info "Создаю CLI voxnode-reset..."
+ln -sf "$VOXNODE_HOME/scripts/reset-config.sh" /usr/local/bin/voxnode-reset
+ok "Доступен: sudo voxnode-reset"
+
+# ==============================================================================
 # 11. Запуск сервисов
 # ==============================================================================
 info "Включаю и запускаю сервисы..."
 systemctl enable --now voxnode-recorder.service 2>/dev/null || warn "recorder не запустился (нормально, если микрофон ещё не подключён)"
+systemctl enable --now voxnode-uploader.service 2>/dev/null || warn "uploader не запустился"
 ok "Сервисы включены"
 
 # ==============================================================================
