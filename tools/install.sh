@@ -271,6 +271,18 @@ ok "Доступен: sudo voxnode-reset"
 # 11. Запуск сервисов
 # ==============================================================================
 info "Включаю и запускаю сервисы..."
+
+# Если уже есть активный WiFi-профиль (малина уже подключена) — создаём маркер
+# wifi-configured, чтобы portal не стартовал при следующей загрузке.
+# Portal нужен только для первого запуска без настроенного WiFi.
+if nmcli -t -f TYPE connection show 2>/dev/null | grep -q '^802-11-wireless$'; then
+    if [ ! -f "$VOXNODE_CONFIG_DIR/wifi-configured" ]; then
+        touch "$VOXNODE_CONFIG_DIR/wifi-configured"
+        chown "$VOXNODE_USER:$VOXNODE_USER" "$VOXNODE_CONFIG_DIR/wifi-configured"
+        ok "маркер wifi-configured создан (WiFi уже настроен через rpi-imager)"
+    fi
+fi
+
 systemctl enable --now voxnode-recorder.service 2>/dev/null || warn "recorder не запустился (нормально, если микрофон ещё не подключён)"
 systemctl enable --now voxnode-uploader.service 2>/dev/null || warn "uploader не запустился"
 ok "Сервисы включены"
