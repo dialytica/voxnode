@@ -69,9 +69,11 @@ fi
 log "локально: $LOCAL_TAG ($LOCAL_SHA)"
 
 # ==============================================================================
-# 3. GitHub API: последний stable-релиз
+# 3. GitHub API: последний тег (по semver, из всех тегов репозитория)
 # ==============================================================================
-API_URL="https://api.github.com/repos/${VOXNODE_REPO}/releases/latest"
+# Используем /tags — это работает без создания GitHub Release (просто git-теги).
+# Сортируем по semver и берём последний.
+API_URL="https://api.github.com/repos/${VOXNODE_REPO}/tags"
 
 # Запрос с коротким timeout — не блокируем загрузку малины надолго
 RESPONSE=$(curl --connect-timeout 5 --max-time 10 -fsSL \
@@ -79,26 +81,37 @@ RESPONSE=$(curl --connect-timeout 5 --max-time 10 -fsSL \
                 "$API_URL" 2>/dev/null || echo "")
 
 if [ -z "$RESPONSE" ]; then
-    log "не удалось получить releases/latest (сеть/GitHub недоступен)"
+    log "не удалось получить теги (сеть/GitHub недоступен)"
     exit 0
 fi
 
-# Извлекаем tag_name из JSON. Python надёжнее, чем grep для JSON.
+# Извлекаем все имена тегов, фильтруем по semver vX.Y.Z (без pre-release),
+# сортируем и берём последний.
 REMOTE_TAG=$(echo "$RESPONSE" | python3 -c "
-import sys, json
+import sys, json, re
 try:
     data = json.load(sys.stdin)
-    print(data.get('tag_name', ''))
+    tags = [item['name'] for item in data]
+    # только stable semver: vX.Y.Z без суффиксов
+    semver = [t for t in tags if re.match(r'^v\d+\.\d+\.\d+\$', t)]
+    if not semver:
+        print('')
+    else:
+        # сортировка по semver
+        def key(t):
+            m = re.match(r'^v(\d+)\.(\d+)\.(\d+)\$', t)
+            return tuple(int(x) for x in m.groups())
+        print(sorted(semver, key=key)[-1])
 except Exception:
     print('')
 " 2>/dev/null || echo "")
 
 if [ -z "$REMOTE_TAG" ]; then
-    err "не удалось распарсить tag_name из ответа API"
+    log "stable-тегов на remote нет — автообновление пропущено"
     exit 0
 fi
 
-log "удалённо: $REMOTE_TAG"
+log "удалённо: $REMOTE_TAG (последний stable)"
 
 # ==============================================================================
 # 4. Сравнение semver
