@@ -1,18 +1,20 @@
 #!/bin/sh
-# tools/check_for_upgrade.sh — проверка наличия обновления (ohmyzsh-style)
+# tools/check_for_upgrade.sh — проверка наличия обновления по тегам релизов
 #
-# Запускается systemd-timer'ом раз в день. Делает дешёвый pre-check через
-# GitHub REST API: сравнивает remote HEAD SHA с локальным. Только если
-# отличаются — вызывает upgrade.sh для тяжёлого git pull + restart.
+# Запускается systemd-timer'ом раз в день.
 #
-# Защита от параллельного запуска: lock-директория (как ohmyzsh
-# $ZSH/log/update.lock) с автоочисткой через 24 часа.
+# Логика:
+#   - GitHub REST API /releases/latest даёт последний STABLE-тег (без pre-release)
+#   - Сравниваем с локальным тегом (git describe --exact-match)
+#   - Если remote-тег новее (semver) → запускаем upgrade.sh
+#   - Если мы на dev-коммите без тега → пропускаем (не откатываемся к тегу автоматически)
+#
+# Защита от параллельного запуска: lock-директория с автоочисткой через 24 часа.
 
 set -e
 
 VOXNODE_HOME="${VOXNODE_HOME:-/opt/voxnode}"
 VOXNODE_REPO="${VOXNODE_REPO:-dialytica/voxnode}"
-VOXNODE_BRANCH="${VOXNODE_BRANCH:-main}"
 LOCK_DIR="$VOXNODE_HOME/.update.lock"
 LOCK_MAX_AGE_SEC=86400  # 24 часа
 
@@ -29,7 +31,6 @@ cd "$VOXNODE_HOME" 2>/dev/null || { err "$VOXNODE_HOME недоступен"; ex
 # ==============================================================================
 # 1. Lock-директория (атомарная операция mkdir)
 # ==============================================================================
-# Сначала чистим устаревший lock
 if [ -d "$LOCK_DIR" ]; then
     lock_age=$(($(date +%s) - $(stat -c %Y "$LOCK_DIR" 2>/dev/null || echo 0)))
     if [ "$lock_age" -gt "$LOCK_MAX_AGE_SEC" ]; then
@@ -52,49 +53,93 @@ cleanup() {
 trap cleanup EXIT
 
 # ==============================================================================
-# 2. Локальный HEAD
+# 2. Локальный тег (точный тег на текущем коммите)
 # ==============================================================================
-LOCAL_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
-if [ -z "$LOCAL_SHA" ]; then
-    err "не могу определить локальный HEAD"
+LOCAL_TAG=$(git describe --tags --exact-match --abbrev=0 2>/dev/null || echo "")
+LOCAL_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+if [ -z "$LOCAL_TAG" ]; then
+    # Мы на dev-коммите между релизами. НЕ пытаемся обновляться автоматически —
+    # dev-малина остаётся на своём коммите до тех пор, пока кто-то явно не
+    # поставит тег или не запустит `voxnode update --force` (заглушка).
+    log "локально: dev-коммит $LOCAL_SHA (нет тега) — автообновление пропущено"
+    exit 0
+fi
+
+log "локально: $LOCAL_TAG ($LOCAL_SHA)"
+
+# ==============================================================================
+# 3. GitHub API: последний stable-релиз
+# ==============================================================================
+API_URL="https://api.github.com/repos/${VOXNODE_REPO}/releases/latest"
+
+# Запрос с коротким timeout — не блокируем загрузку малины надолго
+RESPONSE=$(curl --connect-timeout 5 --max-time 10 -fsSL \
+                -H 'Accept: application/vnd.github+json' \
+                "$API_URL" 2>/dev/null || echo "")
+
+if [ -z "$RESPONSE" ]; then
+    log "не удалось получить releases/latest (сеть/GitHub недоступен)"
+    exit 0
+fi
+
+# Извлекаем tag_name из JSON. Python надёжнее, чем grep для JSON.
+REMOTE_TAG=$(echo "$RESPONSE" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('tag_name', ''))
+except Exception:
+    print('')
+" 2>/dev/null || echo "")
+
+if [ -z "$REMOTE_TAG" ]; then
+    err "не удалось распарсить tag_name из ответа API"
+    exit 0
+fi
+
+log "удалённо: $REMOTE_TAG"
+
+# ==============================================================================
+# 4. Сравнение semver
+# ==============================================================================
+# Если теги совпадают — обновляться не на что
+if [ "$LOCAL_TAG" = "$REMOTE_TAG" ]; then
+    log "уже актуально ($LOCAL_TAG)"
+    exit 0
+fi
+
+# Semver-сравнение через Python (надёжнее, чем bash)
+SHOULD_UPDATE=$(python3 -c "
+import re
+def parse(t):
+    m = re.match(r'^v(\d+)\.(\d+)\.(\d+)\$', t)
+    return tuple(int(x) for x in m.groups()) if m else None
+remote = parse('$REMOTE_TAG')
+local = parse('$LOCAL_TAG')
+if remote is None or local is None:
+    # Хоть один не semver — лексикографическое сравнение
+    print('1' if '$REMOTE_TAG' > '$LOCAL_TAG' else '0')
+else:
+    print('1' if remote > local else '0')
+" 2>/dev/null || echo "0")
+
+if [ "$SHOULD_UPDATE" != "1" ]; then
+    log "локальный тег новее или равен remote — пропускаю"
     exit 0
 fi
 
 # ==============================================================================
-# 3. Дешёвый pre-check через GitHub REST API (timeout 5 сек)
+# 5. Есть новый релиз — запускаем upgrade.sh
 # ==============================================================================
-# Запрашиваем только SHA последнего коммита ветки
-API_URL="https://api.github.com/repos/${VOXNODE_REPO}/commits/${VOXNODE_BRANCH}"
-
-REMOTE_SHA=$(
-    curl --connect-timeout 5 --max-time 10 -fsSL \
-         -H 'Accept: application/vnd.github.v3.sha' \
-         "$API_URL" 2>/dev/null | tr -d '[:space:]'
-)
-
-if [ -z "$REMOTE_SHA" ]; then
-    # Сеть недоступна или GitHub недоступен — тихо выходим, попробуем в следующий раз
-    log "не удалось получить remote SHA (сеть/GitHub недоступен)"
-    exit 0
-fi
-
-log "local:  $(echo "$LOCAL_SHA" | cut -c1-7)"
-log "remote: $(echo "$REMOTE_SHA" | cut -c1-7)"
-
-if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
-    log "уже актуально"
-    exit 0
-fi
-
-# ==============================================================================
-# 4. Есть обновление — запускаем upgrade.sh
-# ==============================================================================
-log "обнаружено обновление, запускаю upgrade.sh"
+log "обнаружен новый релиз: $LOCAL_TAG → $REMOTE_TAG"
+log "запускаю upgrade.sh"
 UPGRADE_SCRIPT="$VOXNODE_HOME/tools/upgrade.sh"
 if [ ! -f "$UPGRADE_SCRIPT" ]; then
     err "$UPGRADE_SCRIPT не найден"
     exit 1
 fi
 
-# Запуск через sh — exec-bit не требуется (надёжнее на свеже-склонированном коде)
+# Передаём целевой тег через env — upgrade.sh подхватит VOXNODE_TARGET_TAG
+export VOXNODE_TARGET_TAG="$REMOTE_TAG"
 sh "$UPGRADE_SCRIPT"

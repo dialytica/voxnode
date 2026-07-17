@@ -64,33 +64,64 @@ BRANCH=$(sudo -u "$VOXNODE_USER" git config voxnode.branch 2>/dev/null || echo "
 log "репозиторий: $REMOTE/$BRANCH"
 
 # ==============================================================================
-# 2. Запоминаем текущий HEAD
+# 2. Запоминаем текущий HEAD + тег
 # ==============================================================================
 LAST_COMMIT=$(sudo -u "$VOXNODE_USER" git rev-parse HEAD 2>/dev/null || echo "")
-log "текущая версия: ${LAST_COMMIT:-неизвестна}"
+LAST_TAG=$(sudo -u "$VOXNODE_USER" git describe --tags --exact-match --abbrev=0 2>/dev/null || echo "")
+log "текущая версия: ${LAST_TAG:-dev} (${LAST_COMMIT:-неизвестна})"
 
 # ==============================================================================
-# 3. git fetch + pull --rebase
+# 3. git fetch
 # ==============================================================================
-log "получаю обновления..."
-if ! sudo -u "$VOXNODE_USER" git fetch --quiet "$REMOTE" "$BRANCH"; then
+log "получаю обновления (fetch + tags)..."
+# Тянем и ветку, и все теги (tags могут быть на любых коммитах)
+if ! sudo -u "$VOXNODE_USER" git fetch --quiet --tags "$REMOTE"; then
     err "git fetch провалился. Проверьте сеть."
     exit 1
 fi
 
-log "применяю (pull --rebase)..."
-if ! sudo -u "$VOXNODE_USER" git pull --quiet --rebase "$REMOTE" "$BRANCH"; then
-    err "git pull --rebase провалился. Возможен конфликт."
-    err "Разрешите вручную: cd $VOXNODE_HOME && sudo -u $VOXNODE_USER git rebase --abort"
-    exit 1
+# ==============================================================================
+# 3b. Определяем цель обновления
+# ==============================================================================
+# Цель приоритета:
+#   1. VOXNODE_TARGET_TAG (явно передан из check_for_upgrade.sh)
+#   2. Последний тег из ветки main (когда запускают `voxnode update` вручную)
+# В обоих случаях мы чекаутим конкретный тег, а не произвольный main-коммит.
+TARGET_TAG="${VOXNODE_TARGET_TAG:-}"
+if [ -z "$TARGET_TAG" ]; then
+    # Ручной запуск `voxnode update` — берём последний тег на origin/main
+    TARGET_TAG=$(sudo -u "$VOXNODE_USER" git tag --merged "$REMOTE/$BRANCH" --sort=-v:refname 2>/dev/null | head -n1 || echo "")
+fi
+
+if [ -z "$TARGET_TAG" ]; then
+    log "тегов нет — обновляюсь на последний коммит $BRANCH"
+    # Fallback на pull main (для dev-репозитория без тегов)
+    if ! sudo -u "$VOXNODE_USER" git pull --quiet --rebase "$REMOTE" "$BRANCH"; then
+        err "git pull --rebase провалился."
+        exit 1
+    fi
+else
+    log "цель обновления: $TARGET_TAG"
+    # Чекаутим тег. Detached HEAD — это нормально для production-малины:
+    # она должна стоять на конкретном релизе, не на ветке.
+    CURRENT_TAG=$(sudo -u "$VOXNODE_USER" git describe --tags --exact-match --abbrev=0 2>/dev/null || echo "")
+    if [ "$CURRENT_TAG" = "$TARGET_TAG" ]; then
+        log "уже на теге $TARGET_TAG"
+        exit 0
+    fi
+    if ! sudo -u "$VOXNODE_USER" git checkout --quiet "$TARGET_TAG"; then
+        err "git checkout $TARGET_TAG провалился. Тег существует?"
+        err "Доступные теги: $(sudo -u $VOXNODE_USER git tag -l | tr '\n' ' ')"
+        exit 1
+    fi
 fi
 
 # ==============================================================================
-# 4. Сравниваем HEAD
+# 4. Сравниваем HEAD после обновления
 # ==============================================================================
 NEW_COMMIT=$(sudo -u "$VOXNODE_USER" git rev-parse HEAD)
+NEW_TAG=$(sudo -u "$VOXNODE_USER" git describe --tags --exact-match --abbrev=0 2>/dev/null || echo "")
 
-# Короткий SHA через cut (POSIX sh не поддерживает ${VAR:0:7})
 short_last=$(echo "$LAST_COMMIT" | cut -c1-7)
 short_new=$(echo "$NEW_COMMIT" | cut -c1-7)
 
@@ -99,7 +130,7 @@ if [ "$LAST_COMMIT" = "$NEW_COMMIT" ]; then
     exit 0
 fi
 
-log "обновление: $short_last -> $short_new"
+log "обновление: ${LAST_TAG:-$short_last} → ${NEW_TAG:-$short_new}"
 
 # ==============================================================================
 # 5. Обновляем Python-зависимости + переустановка пакета
@@ -157,11 +188,14 @@ for svc in $SERVICES; do
 done
 
 # ==============================================================================
-# 9. Запоминаем SHA для changelog (как ohmyzsh.lastVersion)
+# 9. Запоминаем версию для changelog (как ohmyzsh.lastVersion)
+# Сохраняем тег (если был), иначе SHA — для отображения в `voxnode changelog`
 # ==============================================================================
-if [ -n "$LAST_COMMIT" ]; then
-    sudo -u "$VOXNODE_USER" git config voxnode.lastVersion "$LAST_COMMIT"
+LAST_DISPLAY="${LAST_TAG:-$(echo "$LAST_COMMIT" | cut -c1-7)}"
+if [ -n "$LAST_DISPLAY" ]; then
+    sudo -u "$VOXNODE_USER" git config voxnode.lastVersion "$LAST_DISPLAY"
 fi
 
-log "✓ обновление завершено: $(echo "$NEW_COMMIT" | cut -c1-7)"
+NEW_DISPLAY="${NEW_TAG:-$(echo "$NEW_COMMIT" | cut -c1-7)}"
+log "✓ обновление завершено: $NEW_DISPLAY"
 exit 0

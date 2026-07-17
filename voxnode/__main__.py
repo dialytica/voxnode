@@ -12,38 +12,63 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from voxnode.version import get_last_version, get_version
+from voxnode.version import get_last_version, get_version, get_version_detail
 
 
 def cmd_version(_args) -> int:
-    """Показать текущую версию и SHA последнего обновления."""
-    current = get_version()
+    """Показать текущую версию (тег + SHA) и последний апдейт."""
+    detail = get_version_detail()
+    print(f"voxnode {detail['display']}")
+    if detail["tag"]:
+        print(f"  тег:   {detail['tag']}")
+    print(f"  SHA:   {detail['sha']}")
     last = get_last_version()
-    print(f"voxnode {current}")
     if last:
         print(f"Последнее обновление было с: {last}")
-        if last == current:
-            print("  (это текущая версия)")
     else:
         print("Обновлений ещё не было.")
     return 0
 
 
-def cmd_update(_args) -> int:
-    """Запустить проверку/применение обновления вручную."""
+def cmd_update(args) -> int:
+    """Запустить проверку/применение обновления вручную.
+
+    По умолчанию запускает check_for_upgrade.sh (как timer): сравнивает тег
+    с GitHub releases/latest и обновляется только если есть новый релиз.
+
+    С --tag vX.Y.Z принудительно переключается на указанный тег.
+    С --check только проверяет наличие обновления, не применяя.
+    """
     home = Path(__file__).resolve().parent.parent
+
+    if args.check:
+        check = home / "tools" / "check_for_upgrade.sh"
+        if not check.is_file():
+            print(f"✗ check_for_upgrade.sh не найден: {check}", file=sys.stderr)
+            return 1
+        return subprocess.call(["sh", str(check)])
+
     upgrade = home / "tools" / "upgrade.sh"
     if not upgrade.is_file():
         print(f"✗ upgrade.sh не найден: {upgrade}", file=sys.stderr)
         return 1
-    print(f"→ Запускаю {upgrade} ...")
-    rc = subprocess.call(["sh", str(upgrade)])
-    return rc
+
+    env = os.environ.copy()
+    if args.tag:
+        print(f"→ Принудительное обновление на тег {args.tag}")
+        env["VOXNODE_TARGET_TAG"] = args.tag
+    else:
+        print("→ Проверяю и применяю последний релиз (через check_for_upgrade.sh)")
+        check = home / "tools" / "check_for_upgrade.sh"
+        if check.is_file():
+            return subprocess.call(["sh", str(check)])
+    return subprocess.call(["sh", str(upgrade)], env=env)
 
 
 def cmd_changelog(_args) -> int:
@@ -161,8 +186,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("version", help="показать версию")
-    sub.add_parser("update", help="проверить и применить обновление")
+    sub.add_parser("version", help="показать версию (тег + SHA)")
+    p_update = sub.add_parser("update", help="проверить и применить обновление")
+    p_update.add_argument("--tag", help="принудительно переключиться на указанный тег (например v0.2.0)")
+    p_update.add_argument("--check", action="store_true", help="только проверить, не применяя")
     sub.add_parser("changelog", help="коммиты с последнего обновления")
     sub.add_parser("doctor", help="диагностика состояния")
 

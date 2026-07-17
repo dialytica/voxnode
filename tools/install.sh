@@ -154,17 +154,33 @@ sudo -u "$VOXNODE_USER" git config voxnode.remote origin
 sudo -u "$VOXNODE_USER" git config voxnode.branch "$VOXNODE_BRANCH"
 sudo -u "$VOXNODE_USER" git remote add origin "$VOXNODE_REMOTE" || true
 
-if ! sudo -u "$VOXNODE_USER" git fetch --depth=1 origin "$VOXNODE_BRANCH"; then
+# Получаем ветку (с тегами) — нам нужны оба: ветка для fallback, теги для релизов
+if ! sudo -u "$VOXNODE_USER" git fetch --quiet --tags --depth=1 origin "$VOXNODE_BRANCH"; then
     error "git fetch не удался. Проверьте сеть и репозиторий $VOXNODE_REMOTE"
     rm -rf "$VOXNODE_HOME"
     exit 1
 fi
 
-sudo -u "$VOXNODE_USER" git checkout -b "$VOXNODE_BRANCH" "origin/$VOXNODE_BRANCH" || {
-    error "git checkout не удался"
-    rm -rf "$VOXNODE_HOME"
-    exit 1
-}
+# Определяем, что чекаутить:
+#   - если есть теги → последний тег (релиз) — это стабильная установка
+#   - если тегов нет → саму ветку (dev-репозиторий)
+LATEST_TAG=$(sudo -u "$VOXNODE_USER" git tag -l --sort=-v:refname 2>/dev/null | head -n1 || echo "")
+
+if [ -n "$LATEST_TAG" ]; then
+    info "Устанавливаю последний релиз: $LATEST_TAG"
+    sudo -u "$VOXNODE_USER" git checkout --quiet "$LATEST_TAG" || {
+        error "git checkout $LATEST_TAG не удался"
+        rm -rf "$VOXNODE_HOME"
+        exit 1
+    }
+else
+    warn "Тегов нет — устанавливаю ветку $VOXNODE_BRANCH (dev-режим)"
+    sudo -u "$VOXNODE_USER" git checkout -b "$VOXNODE_BRANCH" "origin/$VOXNODE_BRANCH" || {
+        error "git checkout не удался"
+        rm -rf "$VOXNODE_HOME"
+        exit 1
+    }
+fi
 
 # Локальный git identity (для будущих autostash при обновлениях)
 sudo -u "$VOXNODE_USER" git -C "$VOXNODE_HOME" config user.name "dialytica-voxnode"
