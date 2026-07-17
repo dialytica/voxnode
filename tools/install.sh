@@ -182,6 +182,13 @@ sudo -u "$VOXNODE_USER" "$VOXNODE_HOME/.venv/bin/pip" install --quiet -r "$VOXNO
 ok "Python-зависимости установлены"
 
 # ==============================================================================
+# 6b. Устанавливаем voxnode как editable-пакет — pip создаст CLI voxnode
+# ==============================================================================
+info "Устанавливаю voxnode как пакет (это создаст CLI)..."
+sudo -u "$VOXNODE_USER" "$VOXNODE_HOME/.venv/bin/pip" install --quiet --no-deps -e "$VOXNODE_HOME"
+ok "Пакет voxnode установлен"
+
+# ==============================================================================
 # 7. Конфигурация (/etc/voxnode/config.yaml — не трогаем существующий)
 # ==============================================================================
 info "Настраиваю /etc/voxnode/..."
@@ -225,15 +232,18 @@ systemctl daemon-reload
 ok "systemd-юниты установлены"
 
 # ==============================================================================
-# 10. CLI-симлинк /usr/local/bin/voxnode
+# 10. CLI-симлинк /usr/local/bin/voxnode -> venv voxnode
 # ==============================================================================
-info "Создаю CLI-симлинк /usr/local/bin/voxnode..."
+info "Создаю системный CLI /usr/local/bin/voxnode..."
 mkdir -p /usr/local/bin
+# pip install -e уже создал /opt/voxnode/.venv/bin/voxnode. Делаем системный симлинк,
+# который выставляет VOXNODE_HOME/VOXNODE_CONFIG.
 cat > /usr/local/bin/voxnode <<VOXNODE_CLI
 #!/bin/sh
-# voxnode CLI — обёртка над python -m voxnode
-exec env VOXNODE_HOME=$VOXNODE_HOME VOXNODE_CONFIG=$VOXNODE_CONFIG_DIR/config.yaml \\
-    $VOXNODE_HOME/.venv/bin/python -m voxnode "\$@"
+# voxnode CLI — прокси к venv entry point с правильным окружением
+export VOXNODE_HOME=$VOXNODE_HOME
+export VOXNODE_CONFIG=$VOXNODE_CONFIG_DIR/config.yaml
+exec $VOXNODE_HOME/.venv/bin/voxnode "\$@"
 VOXNODE_CLI
 chmod +x /usr/local/bin/voxnode
 ok "CLI доступен: voxnode"

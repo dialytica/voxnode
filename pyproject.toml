@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxnode"
+version = "0.0.0"  # реальная версия — через git rev-parse (см. voxnode/version.py)
+description = "Mass-deployable audio recording agent for Raspberry Pi"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Proprietary" }
+authors = [
+    { name = "dialytica" },
+]
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "requests>=2.31,<3.0",
+    "PyYAML>=6.0,<7.0",
+]
+
+[project.scripts]
+# Создаёт консольную команду `voxnode` после pip install
+voxnode = "voxnode.__main__:main"
+
+[tool.setuptools]
+packages = ["voxnode"]
+
+[tool.setuptools.package-data]
+voxnode = ["../templates/*.html"]

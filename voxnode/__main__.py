@@ -104,18 +104,15 @@ def cmd_doctor(_args) -> int:
     check("RAM-буфер /var/voxnode/buffer", ram.is_dir(),
           "есть" if ram.is_dir() else "нет")
 
-    # Является ли RAM-буфер tmpfs?
+    # Является ли RAM-буфер tmpfs? (парсим /proc/mounts)
     if ram.is_dir():
         try:
             mounts = Path("/proc/mounts").read_text()
+            mountpoint_str = str(ram)
             is_tmpfs = any(
-                ram.samefile(Path(line.split()[1]))
+                line.startswith("tmpfs ") and line.split()[1] == mountpoint_str
                 for line in mounts.splitlines()
-                if line.startswith("tmpfs ")
-            ) if False else False  # упрощённо: ищем по строке
-            is_tmpfs = f" {ram} " in mounts.replace("\\040(deleted)", "") and "tmpfs" in [
-                l for l in mounts.splitlines() if ram.name in l
-            ][0]
+            )
             check("RAM-буфер примонтирован как tmpfs", is_tmpfs)
         except Exception:
             pass
