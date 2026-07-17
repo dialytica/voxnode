@@ -1,0 +1,36 @@
+[Unit]
+Description=voxnode captive portal (first-boot WiFi setup)
+Documentation=https://github.com/dialytica/voxnode
+After=NetworkManager.service network-online.target
+Wants=NetworkManager.service
+
+# Стартует ТОЛЬКО если нет маркера wifi-configured.
+# При первой установке / после reset-config маркера нет → портал поднимется.
+# После успешной настройки маркер создаётся → портал больше не стартует.
+ConditionPathExists=!/etc/voxnode/wifi-configured
+
+[Service]
+Type=simple
+User=root
+# Portal нужен root: поднимать AP, править NM-профили, ребутать
+Environment=VOXNODE_HOME=/opt/voxnode
+Environment=VOXNODE_CONFIG=/etc/voxnode/config.yaml
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/voxnode/.venv/bin/python -m voxnode.portal
+
+WorkingDirectory=/opt/voxnode
+
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxnode-portal
+
+# Portal поднимает AP — ему нужен доступ к сети
+PrivateTmp=false
+ProtectSystem=false
+
+[Install]
+WantedBy=multi-user.target
