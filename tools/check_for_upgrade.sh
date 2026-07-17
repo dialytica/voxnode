@@ -78,8 +78,8 @@ if [ -z "$REMOTE_SHA" ]; then
     exit 0
 fi
 
-log "local:  ${LOCAL_SHA:0:7}"
-log "remote: ${REMOTE_SHA:0:7}"
+log "local:  $(echo "$LOCAL_SHA" | cut -c1-7)"
+log "remote: $(echo "$REMOTE_SHA" | cut -c1-7)"
 
 if [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
     log "уже актуально"
