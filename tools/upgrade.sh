@@ -90,12 +90,16 @@ fi
 # ==============================================================================
 NEW_COMMIT=$(sudo -u "$VOXNODE_USER" git rev-parse HEAD)
 
+# Короткий SHA через cut (POSIX sh не поддерживает ${VAR:0:7})
+short_last=$(echo "$LAST_COMMIT" | cut -c1-7)
+short_new=$(echo "$NEW_COMMIT" | cut -c1-7)
+
 if [ "$LAST_COMMIT" = "$NEW_COMMIT" ]; then
-    log "уже на последней версии (${NEW_COMMIT:0:7})."
+    log "уже на последней версии ($short_new)."
     exit 0
 fi
 
-log "обновление: ${LAST_COMMIT:0:7} -> ${NEW_COMMIT:0:7}"
+log "обновление: $short_last -> $short_new"
 
 # ==============================================================================
 # 5. Обновляем Python-зависимости + переустановка пакета
@@ -159,5 +163,5 @@ if [ -n "$LAST_COMMIT" ]; then
     sudo -u "$VOXNODE_USER" git config voxnode.lastVersion "$LAST_COMMIT"
 fi
 
-log "✓ обновление завершено: ${NEW_COMMIT:0:7}"
+log "✓ обновление завершено: $(echo "$NEW_COMMIT" | cut -c1-7)"
 exit 0
