@@ -178,13 +178,24 @@ if [ -d systemd ]; then
 fi
 
 # ==============================================================================
-# 8. Перезапуск сервисов (recorder последним)
+# 8. Включение + перезапуск сервисов (recorder последним)
 # ==============================================================================
+# Сначала включаем все сервисы, которых ещё нет в автозагрузке — это
+# обеспечивает bootstrap новых юнитов, добавленных в этом релизе.
 for svc in $SERVICES; do
-    if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
-        log "перезапускаю $svc..."
-        systemctl restart "$svc" 2>/dev/null || log "  (не запущен, пропускаю)"
+    unit="$svc.service"
+    if [ -f "/etc/systemd/system/$unit" ]; then
+        if ! systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+            log "включаю $svc (новый)..."
+            systemctl enable "$svc" 2>/dev/null || log "  (не удалось enable)"
+        fi
     fi
+done
+
+# Теперь перезапускаем активные + только что включённые
+for svc in $SERVICES; do
+    log "перезапускаю $svc..."
+    systemctl restart "$svc" 2>/dev/null || log "  (не запущен, пропускаю)"
 done
 
 # ==============================================================================
