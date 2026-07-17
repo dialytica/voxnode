@@ -42,8 +42,11 @@ def get_commit_sha(short: bool = True) -> str:
     Args:
         short: True → короткий SHA (a1b2c3d), False → полный.
     """
+    # Важно: HEAD передаётся всегда. --short — модификатор вывода.
     args = ["git", "-C", INSTALL_DIR, "rev-parse"]
-    args.append("--short" if short else "HEAD")
+    if short:
+        args.append("--short")
+    args.append("HEAD")
     try:
         result = subprocess.run(args, capture_output=True, text=True, timeout=3, check=True)
         return result.stdout.strip() or _FALLBACK_VERSION
