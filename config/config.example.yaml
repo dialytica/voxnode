@@ -1,0 +1,66 @@
+# voxnode configuration
+#
+# Этот файл — ШАБЛОН. На устройстве настоящий конфиг живёт в /etc/voxnode/config.yaml
+# (его создаёт install.sh из этого шаблона, либо captive-portal при настройке WiFi).
+#
+# Все поля имеют дефолты (см. voxnode/config.py), так что можно переопределить
+# только нужное. Ниже — пример с комментариями.
+
+# --- Запись аудио ---
+recorder:
+  # ALSA-устройство микрофона. 'default' — системный ввод по умолчанию.
+  # Для ReSpeaker XVF3800 обычно 'plughw:CARD=3800' (узнать: arecord -l).
+  device: default
+
+  # Частота дискретизации. 16000 Гц — родная для XVF3800 и оптимальна для речи
+  # (телефонное качество, без избыточности). 8000 — ещё меньше, но глухо.
+  sample_rate: 16000
+
+  # Каналы. Моно (1) достаточно для речи и вдвое меньше данных.
+  # XVF3800 отдаёт 2 обработанных канала; ffmpeg сам сведёт в моно.
+  channels: 1
+
+  # Длина сегмента в секундах. 60 — минутные файлы, удобно для загрузки и
+  # навигации на сервере.
+  segment_seconds: 60
+
+  # Кодек ffmpeg. 'opus' оптимален для речи: ~24 kbps, ~1.7 MB/час.
+  # Альтернативы: 'flac' (lossless, ~8 MB/мин), 'mp3' (широко поддержан).
+  format: opus
+
+
+# --- Отправка на сервер ---
+uploader:
+  # URL dialytica-сервера (без trailing slash). ОБЯЗАТЕЛЬНО для загрузки.
+  # Пока пусто — устройство копит записи в буфере, ничего не отправляя.
+  server_url: https://api.dialytica.ru
+
+  # Идентификатор устройства. Уникален в рамках проекта dialytica.
+  # Назначается при регистрации точки (например, 'shop-moscow-01').
+  device_id: voxnode-unknown
+
+  # Секрет для HMAC-подписи загрузок. Генерируется сервером при регистрации
+  # устройства и уникален для каждого device_id. Защищает от подделки записей.
+  device_secret: ""
+
+  # Куда POST'ить. По умолчанию /api/v1/audio/upload относительно server_url.
+  upload_endpoint: /api/v1/audio/upload
+
+  connect_timeout: 10
+  read_timeout: 60
+  max_retries: 5
+  backoff_base: 2.0
+
+
+# --- Буфер (tmpfs + spill на SD) ---
+buffer:
+  # RAM-буфер. tmpfs, монтируется в install.sh через systemd-mount или fstab.
+  # 512 MB на Pi 3 (1 GB RAM) вмещает ~2 дня Opus-записей в offline.
+  ram_dir: /var/voxnode/buffer
+
+  # Сброс на SD при переполнении RAM (watchdog мониторит ram_max_mb).
+  # Записи здесь переживают выключение питания, но пишутся на карту.
+  spill_dir: /var/voxnode/spill
+
+  # Порог: при достижении ram_max_mb watchdog переносит старые файлы в spill_dir.
+  ram_max_mb: 512

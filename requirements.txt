@@ -1,0 +1,8 @@
+# voxnode — Python dependencies
+#
+# Устанавливаются через tools/install.sh.
+# На малине используется системный Python (Debian trixie, Python 3.12+).
+
+Flask>=3.0,<4.0          # Captive portal web UI
+requests>=2.31,<3.0      # HTTP-клиент для uploader
+PyYAML>=6.0,<7.0         # Парсинг /etc/voxnode/config.yaml
