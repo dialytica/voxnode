@@ -34,7 +34,9 @@ log = logging.getLogger("voxnode.uploader")
 
 # Расширения, которые uploader обрабатывает
 AUDIO_EXTS = {".opus", ".ogg", ".wav", ".mp3", ".flac", ".m4a"}
-PARTIAL_SUFFIX = ".part"
+# .part суффикс больше не используется (конфликтует с ffmpeg segment muxer).
+# Вместо этого uploader определяет готовые файлы по возрасту mtime.
+PARTIAL_SUFFIX = ".part"  # оставлен для обратной совместимости со старыми файлами
 
 # Интервал между проходами сканера, когда буфер пуст
 IDLE_INTERVAL_SEC = 5

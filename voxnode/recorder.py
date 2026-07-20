@@ -108,13 +108,15 @@ def build_ffmpeg_cmd(cfg: Config, out_pattern: str) -> list[str]:
 def _out_pattern(cfg: Config) -> str:
     """Шаблон пути для segment muxer'а.
 
-    ffmpeg с -strftime 1 подставляет strftime-коды. Добавляем .part, чтобы
-    uploader не забрал пишущийся файл.
+    ffmpeg с -strftime 1 подставляет strftime-коды в момент ротации сегмента.
+    .part суффикс не используется — он конфликтует со strftime + segment muxer
+    (ffmpeg ругается 'Output file does not contain any stream').
+    Вместо этого uploader определяет готовые файлы по возрасту mtime (>2с).
     """
     device_id = cfg.uploader.device_id
     fmt = cfg.recorder.format
-    # %Y%m%dT%H%M%SZ -> UTC время старта сегмента (системные часы в UTC на Pi)
-    name = f"{device_id}_%Y%m%dT%H%M%SZ.{fmt}{_PARTIAL_SUFFIX}"
+    # %Y%m%dT%H%M%SZ -> UTC время старта сегмента
+    name = f"{device_id}_%Y%m%dT%H%M%SZ.{fmt}"
     return str(Path(cfg.buffer.ram_dir) / name)
 
 
