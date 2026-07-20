@@ -32,15 +32,12 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=voxnode-recorder
 
-# Hardening: минимальные привилии
-# ProtectSystem=strict ломает ALSA — snd_config_get_card читает /proc/asound
-# для lookup'а карты по имени. Делаем менее строго: только ProtectHome.
+# Hardening: минимальные привилии.
+# ВАЖНО: не используем ProtectSystem/DevicePolicy — ALSA требует доступ к
+# /proc/asound, /dev/snd/*, и shared memory. Они ломают запись.
 NoNewPrivileges=true
 ProtectHome=true
 PrivateTmp=false
-ReadWritePaths=/var/voxnode /etc/voxnode
-# Доступ к аудио-устройствам
-DeviceAllow=/dev/snd rw
 
 [Install]
 WantedBy=multi-user.target
