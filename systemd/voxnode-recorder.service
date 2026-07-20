@@ -15,6 +15,9 @@ SupplementaryGroups=audio
 Environment=VOXNODE_HOME=/opt/voxnode
 Environment=VOXNODE_CONFIG=/etc/voxnode/config.yaml
 Environment=PYTHONUNBUFFERED=1
+# HOME и LANG обязательны для ALSA — без них snd_config_get_card не находит карту по имени
+Environment=HOME=/home/contai
+Environment=LANG=en_US.UTF-8
 
 ExecStart=/opt/voxnode/.venv/bin/python -m voxnode.recorder
 
