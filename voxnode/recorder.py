@@ -52,10 +52,28 @@ def build_ffmpeg_cmd(cfg: Config, out_pattern: str) -> list[str]:
 
     Используем segment muxer с time-based segmenting. Opus оптимален для речи.
 
+    Важный нюанс ALSA: устройство может отдавать только свои нативные каналы
+    (например ReSpeaker XVF3800 = строго 2 канала). Запрашивать у ALSA 1 канал
+    бесполезно — она не умеет сводить. Поэтому:
+      - Захват: всегда channels=2 (натив ReSpeaker), ALSA откроет устройство.
+      - Сведение в моно: через ffmpeg audio filter 'pan=mono|c0=c1' (берём
+        канал ASR/beam как более качественный для речи, канал 1 в XVF3800).
+
     Note: ALSA-источник через '-f alsa -i <device>'. Для ReSpeaker XVF3800
-    device имеет вид 'plughw:CARD=3800'. 'default' — системный capture по умолчанию.
+    device имеет вид 'hw:Array' (число нестабильно при подключении доп. карт).
     """
     r = cfg.recorder
+    # Сколько каналов захватывать из ALSA (натив устройства, не путать с output)
+    alsa_channels = 2
+
+    # Если целевой channels=1 — сводим через pan filter в моно, беря канал 1
+    # (ASR/beam XVF3800 = более разборчивая речь, чем канал 0 Conference).
+    # Если channels=2 — оставляем стерео как есть.
+    if r.channels == 1:
+        audio_filter = ["-af", "pan=mono|c0=c1"]
+    else:
+        audio_filter = []
+
     cmd = [
         "ffmpeg",
         "-hide_banner",
@@ -64,8 +82,11 @@ def build_ffmpeg_cmd(cfg: Config, out_pattern: str) -> list[str]:
         # --- Вход: ALSA ---
         "-f", "alsa",
         "-sample_rate", str(r.sample_rate),
-        "-channels", str(r.channels),
+        "-channels", str(alsa_channels),
         "-i", r.device,
+    ]
+    cmd += audio_filter
+    cmd += [
         # --- Кодирование: libopus для речи ---
         "-c:a", "libopus",
         "-b:a", "24k",                    # 24 kbps достаточно для речи 16kHz mono
