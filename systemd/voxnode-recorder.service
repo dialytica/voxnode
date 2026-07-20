@@ -8,6 +8,8 @@ Wants=sound.target
 Type=simple
 User=contai
 Group=contai
+# Supplementary groups — нужны для доступа к /dev/snd (группа audio)
+SupplementaryGroups=audio
 
 # Каталог установки и venv (ohmyzsh-style: всё в /opt/voxnode)
 Environment=VOXNODE_HOME=/opt/voxnode
