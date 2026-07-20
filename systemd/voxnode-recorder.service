@@ -28,8 +28,9 @@ StandardError=journal
 SyslogIdentifier=voxnode-recorder
 
 # Hardening: минимальные привилии
+# ProtectSystem=strict ломает ALSA — snd_config_get_card читает /proc/asound
+# для lookup'а карты по имени. Делаем менее строго: только ProtectHome.
 NoNewPrivileges=true
-ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=false
 ReadWritePaths=/var/voxnode /etc/voxnode
